@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices", ":disableRateLimiting"],
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
+  "dependencyDashboard": false,
+  "timezone": "Europe/Paris",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update golangci-lint version",
+      "fileMatch": [
+        "^\\.github/workflows/linting\\.yml$"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.+) depName=(?<depName>.+)\\s+\\w+: \\s?(?<currentValue>.+)"
+      ]
+    }
+  ]
+}
