@@ -34,20 +34,16 @@ type metadataHolder interface {
 }
 
 type handlerInput[Input any] struct {
-	OperationName string
-	Options       *Options
+	OperationName     string
+	Options           *Options
+	SuccessStatusCode int
 
 	CallInput     Input
 	ServerRequest *fasthttp.Request
 }
 
-func newHandlerInput[Input any](input Input, operationName string, options *Options) *handlerInput[Input] {
-	return &handlerInput[Input]{
-		OperationName: operationName,
-		Options:       options,
-		CallInput:     input,
-		ServerRequest: fasthttp.AcquireRequest(),
-	}
+func (input *handlerInput[Input]) InitHTTP() {
+	input.ServerRequest = fasthttp.AcquireRequest()
 }
 
 func (input *handlerInput[Input]) ReleaseHTTP() {
@@ -253,7 +249,7 @@ func (*serverSideErrorMiddleware[Input, Output]) Middleware(ctx context.Context,
 	}
 
 	statusCode := output.ServerResponse.StatusCode()
-	if statusCode >= 200 && statusCode < 300 {
+	if statusCode == input.SuccessStatusCode {
 		return output, nil
 	}
 

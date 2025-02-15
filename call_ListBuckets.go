@@ -63,7 +63,14 @@ func (output *ListBucketsOutput) unmarshalHTTP(resp *fasthttp.Response) error {
 }
 
 func (c *Client) ListBuckets(ctx context.Context, input *ListBucketsInput, optFns ...func(*Options)) (*ListBucketsOutput, error) {
-	in := newHandlerInput(input, "ListBuckets", c.options.With(optFns...))
+	in := &handlerInput[*ListBucketsInput]{
+		OperationName:     "ListBuckets",
+		Options:           c.options.With(optFns...),
+		SuccessStatusCode: fasthttp.StatusOK,
+		CallInput:         input,
+	}
+
+	in.InitHTTP()
 	defer in.ReleaseHTTP()
 
 	out, err := handleCall[*ListBucketsInput, ListBucketsOutput](ctx, in)

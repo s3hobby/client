@@ -124,7 +124,14 @@ func (output *HeadObjectOutput) unmarshalHTTP(resp *fasthttp.Response) error {
 }
 
 func (c *Client) HeadObject(ctx context.Context, input *HeadObjectInput, optFns ...func(*Options)) (*HeadObjectOutput, error) {
-	in := newHandlerInput(input, "HeadObject", c.options.With(optFns...))
+	in := &handlerInput[*HeadObjectInput]{
+		OperationName:     "HeadObject",
+		Options:           c.options.With(optFns...),
+		SuccessStatusCode: fasthttp.StatusOK,
+		CallInput:         input,
+	}
+
+	in.InitHTTP()
 	defer in.ReleaseHTTP()
 
 	out, err := handleCall[*HeadObjectInput, HeadObjectOutput](ctx, in)

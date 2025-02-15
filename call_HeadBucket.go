@@ -64,7 +64,14 @@ func (output *HeadBucketOutput) unmarshalHTTP(resp *fasthttp.Response) error {
 }
 
 func (c *Client) HeadBucket(ctx context.Context, input *HeadBucketInput, optFns ...func(*Options)) (*HeadBucketOutput, error) {
-	in := newHandlerInput(input, "HeadBucket", c.options.With(optFns...))
+	in := &handlerInput[*HeadBucketInput]{
+		OperationName:     "HeadBucket",
+		Options:           c.options.With(optFns...),
+		SuccessStatusCode: fasthttp.StatusOK,
+		CallInput:         input,
+	}
+
+	in.InitHTTP()
 	defer in.ReleaseHTTP()
 
 	out, err := handleCall[*HeadBucketInput, HeadBucketOutput](ctx, in)
