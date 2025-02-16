@@ -13,20 +13,18 @@ type contextKey string
 
 var callerKey contextKey = "the-caller"
 
-type mockMiddleware struct {
-	v string
-}
+func newMockMiddleware(v string) Middleware[string, string] {
+	return MiddlewareFunc[string, string](func(ctx context.Context, input string, next Handler[string, string]) (string, error) {
+		fmt.Println(">>>", v)
+		fmt.Println("  ctx.caller:", ctx.Value(callerKey))
+		fmt.Println("  input:", input)
+		ret, err := next.Handle(context.WithValue(ctx, callerKey, v), "input-"+v)
+		fmt.Println("  ret:", ret)
+		fmt.Println("  err:", err)
+		fmt.Println("<<<", v)
 
-func (m *mockMiddleware) Middleware(ctx context.Context, input string, next Handler[string, string]) (string, error) {
-	fmt.Println(">>>", m.v)
-	fmt.Println("  ctx.caller:", ctx.Value(callerKey))
-	fmt.Println("  input:", input)
-	ret, err := next.Handle(context.WithValue(ctx, callerKey, m.v), "input-"+m.v)
-	fmt.Println("  ret:", ret)
-	fmt.Println("  err:", err)
-	fmt.Println("<<<", m.v)
-
-	return "ret-" + m.v, errors.New("error-" + m.v)
+		return "ret-" + v, errors.New("error-" + v)
+	})
 }
 
 func TestNewChain(t *testing.T) {
@@ -47,9 +45,9 @@ func TestNewChain(t *testing.T) {
 }
 
 func ExampleNewChain() {
-	m1 := &mockMiddleware{v: "m1"}
-	m2 := &mockMiddleware{v: "m2"}
-	m3 := &mockMiddleware{v: "m3"}
+	m1 := newMockMiddleware("m1")
+	m2 := newMockMiddleware("m2")
+	m3 := newMockMiddleware("m3")
 
 	h := HandlerFunc[string, string](func(ctx context.Context, input string) (string, error) {
 		fmt.Println(">>> handler")
