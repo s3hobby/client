@@ -55,6 +55,7 @@ func (in *inmemoryTester) Close() {
 
 func (in *inmemoryTester) Client() *fasthttp.Client {
 	return &fasthttp.Client{
+		NoDefaultUserAgentHeader: true,
 		Dial: func(addr string) (net.Conn, error) {
 			return in.ln.Dial()
 		},

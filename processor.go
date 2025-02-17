@@ -128,7 +128,6 @@ func (*errorMiddleware[Input, Output]) Middleware(ctx context.Context, input *ha
 	if err == nil {
 		return output, nil
 	}
-	output.ReleaseHTTP()
 
 	var serverSideError *ServerSideError
 	var clientSideError *ClientSideError
@@ -156,8 +155,8 @@ func (*configValidationMiddleware[Input, Output]) Middleware(ctx context.Context
 type userAgentMiddleware[Input any, Output any] struct{}
 
 func (*userAgentMiddleware[Input, Output]) Middleware(ctx context.Context, input *handlerInput[Input], next Handler[Input, Output]) (*handlerOutput[Output], error) {
-	if input.Options.UserAgent != nil && *input.Options.UserAgent != "" {
-		input.ServerRequest.Header.SetUserAgent(*input.Options.UserAgent)
+	if input.Options.UserAgent != "" {
+		input.ServerRequest.Header.SetUserAgent(input.Options.UserAgent)
 	}
 
 	return next.Handle(ctx, input)
@@ -208,7 +207,6 @@ func (*transportMiddleware[Input, Output]) Middleware(ctx context.Context, input
 
 	output, err := next.Handle(ctx, input)
 	if err != nil {
-		output.ReleaseHTTP()
 		return nil, err
 	}
 
@@ -244,7 +242,6 @@ type serverSideErrorMiddleware[Input any, Output any] struct{}
 func (*serverSideErrorMiddleware[Input, Output]) Middleware(ctx context.Context, input *handlerInput[Input], next Handler[Input, Output]) (*handlerOutput[Output], error) {
 	output, err := next.Handle(ctx, input)
 	if err != nil {
-		output.ReleaseHTTP()
 		return nil, err
 	}
 

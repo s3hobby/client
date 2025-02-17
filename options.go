@@ -6,15 +6,8 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-const DefaultUserAgent = "s3hobby-client"
-
 type Options struct {
-
-	// UserAgent specifies how to populate the User-Agent header.
-	// [DefaultUserAgent] is used when nil.
-	// Nothing is sent when the pointed value is empty.
-	// Otherwise, the pointed value is sent.
-	UserAgent *string
+	UserAgent string
 
 	UsePathStyle bool
 	EndpointHost string `validate:"hostname|hostname_port"`
@@ -45,11 +38,6 @@ func (opts *Options) With(optFns ...func(*Options)) *Options {
 func (opts *Options) setDefaults() {
 	if opts.EndpointResolver == nil {
 		opts.EndpointResolver = &defaultEndpointResolver{}
-	}
-
-	if opts.UserAgent == nil {
-		userAgent := DefaultUserAgent
-		opts.UserAgent = &userAgent
 	}
 
 	if opts.HTTPClient == nil {
