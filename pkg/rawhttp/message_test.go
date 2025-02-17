@@ -179,57 +179,59 @@ func TestStartLine_marshaling(t *testing.T) {
 	})
 }
 
-func TestHeader(t *testing.T) {
-	newHeader := func(t *testing.T, raw map[string]string) *Header {
-		h := &Header{}
+func TestHeader_marshaling(t *testing.T) {
+	t.Run("normal", func(t *testing.T) {
+		testCases := []struct {
+			decoded Header
+			encoded string
+		}{
+			{
+				Header{},
+				"\r\n",
+			},
+			{
+				Header{map[string]string{
+					"my-key": "my-value",
+				}},
+				"my-key: my-value\r\n\r\n",
+			},
 
-		for k, v := range raw {
-			if h.Has(k) {
-				require.Failf(t, "Header %q already present", k)
-			}
-
-			h.Set(k, v)
+			{
+				Header{map[string]string{
+					"01234": "56789",
+					"abcde": "fghij",
+				}},
+				"01234: 56789\r\nabcde: fghij\r\n\r\n",
+			},
 		}
 
-		return h
-	}
-
-	t.Run("marshal", func(t *testing.T) {
-		t.Run("normal", func(t *testing.T) {
-			testCases := []struct {
-				name     string
-				input    map[string]string
-				expected string
-			}{
-				{
-					name:     "empty",
-					input:    nil,
-					expected: "\r\n",
-				},
-				{
-					name:     "one value",
-					input:    map[string]string{"my-key": "my-value"},
-					expected: "my-key: my-value\r\n\r\n",
-				},
-			}
-
-			for _, tc := range testCases {
-				t.Run(tc.name, func(t *testing.T) {
+		for i, tc := range testCases {
+			t.Run(strconv.Itoa(i), func(t *testing.T) {
+				t.Run("marshal", func(t *testing.T) {
 					var buf bytes.Buffer
-					h := newHeader(t, tc.input)
-					err := h.Marshal(&buf)
+					err := tc.decoded.Marshal(&buf)
 					require.NoError(t, err)
-					require.Equal(t, tc.expected, buf.String())
+					require.Equal(t, tc.encoded, buf.String())
 				})
-			}
-		})
 
-		t.Run("error", func(t *testing.T) {
+				t.Run("unmarshal", func(t *testing.T) {
+					r := bufio.NewReader(bytes.NewReader([]byte(tc.encoded)))
+
+					header := &Header{}
+					err := header.Unmarshal(r)
+					require.NoError(t, err)
+					require.Equal(t, &tc.decoded, header)
+				})
+			})
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		t.Run("marshal", func(t *testing.T) {
 			t.Run("line write error", func(t *testing.T) {
-				data := map[string]string{
+				h := &Header{map[string]string{
 					"the-key": "the-value",
-				}
-				h := newHeader(t, data)
+				}}
 				err := h.Marshal(&ErrorWriter{})
 				require.ErrorIs(t, err, ErrForTestWrite)
 			})
@@ -240,58 +242,8 @@ func TestHeader(t *testing.T) {
 				require.ErrorIs(t, err, ErrForTestWrite)
 			})
 		})
-	})
 
-	t.Run("unmarshal", func(t *testing.T) {
-		t.Run("normal", func(t *testing.T) {
-			testCases := []struct {
-				name     string
-				input    string
-				expected map[string]string
-				trailer  string
-			}{
-				{
-					name:     "empty",
-					input:    "\r\n",
-					expected: map[string]string{},
-				},
-				{
-					name:     "one value",
-					input:    "the-key: the-value\r\n\r\n",
-					expected: map[string]string{"the-key": "the-value"},
-				},
-				{
-					name:  "two values",
-					input: "01234: 56789\r\nabcde: fghij\r\n\r\n",
-					expected: map[string]string{
-						"01234": "56789",
-						"abcde": "fghij",
-					},
-				},
-				{
-					name:     "trailer",
-					input:    "the-key: the-value\r\n\r\nthe\r\ntrailer",
-					expected: map[string]string{"the-key": "the-value"},
-					trailer:  "the\r\ntrailer",
-				},
-			}
-
-			for _, tc := range testCases {
-				t.Run(tc.name, func(t *testing.T) {
-					r := bufio.NewReader(bytes.NewReader([]byte(tc.input)))
-
-					header := &Header{}
-					err := header.Unmarshal(r)
-					require.NoError(t, err)
-
-					trailer, err := io.ReadAll(r)
-					require.NoError(t, err)
-					require.Equal(t, []byte(tc.trailer), trailer)
-				})
-			}
-		})
-
-		t.Run("error", func(t *testing.T) {
+		t.Run("unmarshal", func(t *testing.T) {
 			testCases := []struct {
 				input         string
 				unexpectedEOF bool
