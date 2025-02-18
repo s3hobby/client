@@ -37,6 +37,10 @@ func ReadUntilDelimiter(b *bufio.Reader, delim []byte) ([]byte, error) {
 			return nil, fmt.Errorf("ReadUntilDelimiter: peek error: %w", err)
 		}
 
-		n = b.Buffered() + 1
+		if buffered := b.Buffered(); n < buffered {
+			n = buffered
+		} else {
+			n = buffered + 1
+		}
 	}
 }

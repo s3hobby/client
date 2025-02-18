@@ -17,24 +17,24 @@ type Message struct {
 	Header    Header
 }
 
-func (req *Message) Marshal(w io.Writer) error {
-	if err := req.StartLine.Marshal(w); err != nil {
+func (m *Message) Marshal(w io.Writer) error {
+	if err := m.StartLine.Marshal(w); err != nil {
 		return fmt.Errorf("Message.Marshal: cannot marshal start line: %w", err)
 	}
 
-	if err := req.Header.Marshal(w); err != nil {
+	if err := m.Header.Marshal(w); err != nil {
 		return fmt.Errorf("Message.Marshal: cannot marshal header: %w", err)
 	}
 
 	return nil
 }
 
-func (req *Message) Unmarshal(b *bufio.Reader) error {
-	if err := req.StartLine.Unmarshal(b); err != nil {
+func (m *Message) Unmarshal(b *bufio.Reader) error {
+	if err := m.StartLine.Unmarshal(b); err != nil {
 		return err
 	}
 
-	if err := req.Header.Unmarshal(b); err != nil {
+	if err := m.Header.Unmarshal(b); err != nil {
 		return err
 	}
 
