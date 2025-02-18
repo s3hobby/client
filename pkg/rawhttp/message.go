@@ -15,15 +15,26 @@ import (
 type Message struct {
 	StartLine StartLine
 	Header    Header
+	Body      []byte
 }
 
 func (m *Message) Marshal(w io.Writer) error {
+	if m.StartLine.First == MethodHead && len(m.Body) > 0 {
+		return fmt.Errorf("Message.Marshal: body is not allowed on head request")
+	}
+
 	if err := m.StartLine.Marshal(w); err != nil {
 		return fmt.Errorf("Message.Marshal: cannot marshal start line: %w", err)
 	}
 
 	if err := m.Header.Marshal(w); err != nil {
 		return fmt.Errorf("Message.Marshal: cannot marshal header: %w", err)
+	}
+
+	if len(m.Body) > 0 {
+		if n, err := w.Write(m.Body); err != nil {
+			return fmt.Errorf("Message.Marshal: cannot write body (n=%d): %w", n, err)
+		}
 	}
 
 	return nil

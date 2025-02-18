@@ -2,6 +2,7 @@ package rawhttp
 
 import (
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -15,11 +16,20 @@ import (
 )
 
 func TestClient_Do(t *testing.T) {
+	reqBody := []byte("the request body\n")
 	respBody := []byte("Hello world !\n")
 	requestID := uuid.NewString()
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, requestID, r.Header.Get("x-request-id"))
+
+		receivedReqBody, err := io.ReadAll(r.Body)
+		if !assert.NoError(t, err) {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		assert.Equal(t, reqBody, receivedReqBody)
 
 		// Prevent date header to be sent by the server
 		w.Header()["Date"] = []string{}
@@ -51,8 +61,9 @@ func TestClient_Do(t *testing.T) {
 		Header: Header{data: map[string]string{
 			"x-request-id":   requestID,
 			"host":           s.Listener.Addr().String(),
-			"content-length": "0",
+			"content-length": strconv.Itoa(len(reqBody)),
 		}},
+		Body: reqBody,
 	}
 
 	t.Log("Will connect to:", s.Listener.Addr().String())

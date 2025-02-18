@@ -17,21 +17,22 @@ func TestMessage_marshaling(t *testing.T) {
 			encoded string
 		}{
 			{
+				Message{StartLine: StartLine{"HEAD", "/my-url", "HTTP/1.1"}},
+				"HEAD /my-url HTTP/1.1" + "\r\n" +
+					"\r\n",
+			},
+			{
 				Message{
 					StartLine{"HEAD", "/my-url", "HTTP/1.1"},
 					Header{map[string]string{
 						"x-first-header":  "12345",
 						"x-second-header": "abcde",
 					}},
+					nil,
 				},
 				"HEAD /my-url HTTP/1.1" + "\r\n" +
 					"x-first-header: 12345" + "\r\n" +
 					"x-second-header: abcde" + "\r\n" +
-					"\r\n",
-			},
-			{
-				Message{StartLine: StartLine{"HEAD", "/my-url", "HTTP/1.1"}},
-				"HEAD /my-url HTTP/1.1" + "\r\n" +
 					"\r\n",
 			},
 		}
@@ -63,6 +64,7 @@ func TestMessage_marshaling(t *testing.T) {
 					"x-first-header":  "12345",
 					"x-second-header": "abcde",
 				}},
+				nil,
 			}
 
 			testCases := []struct {
