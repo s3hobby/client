@@ -12,7 +12,10 @@ func NewInmemoryTester(handler func(ctx *fasthttp.RequestCtx)) InmemoryTester {
 	ret := &inmemoryTester{
 		ln: fasthttputil.NewInmemoryListener(),
 		server: &fasthttp.Server{
-			Handler: handler,
+			Handler:               handler,
+			NoDefaultServerHeader: true,
+			NoDefaultDate:         true,
+			NoDefaultContentType:  true,
 		},
 	}
 

@@ -54,6 +54,8 @@ func (*httpRequesterHandler[Input, Output]) Handle(ctx context.Context, input *h
 		return nil, fmt.Errorf("HTTP request error: %v", err)
 	}
 
+	output.ServerResponse.Header.SetNoDefaultContentType(true)
+
 	return output, nil
 }
 
