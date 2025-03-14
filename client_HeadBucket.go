@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/valyala/fasthttp"
 )
 
 type HeadBucketInput struct {
@@ -13,14 +15,58 @@ type HeadBucketInput struct {
 	ExpectedBucketOwner *string
 }
 
-type HeadBucketOutput struct {
-	BucketRegion *string
+func (input *HeadBucketInput) bucket() string {
+	return input.Bucket
 }
 
-func (c *Client) HeadBucket(_ context.Context, input *HeadBucketInput) (*HeadBucketOutput, error) {
-	if input.Bucket == "" {
-		return nil, errors.New("client.Client.HeadBucket: bucket is mandatory")
+func (input *HeadBucketInput) marshalHTTP(req *fasthttp.Request) error {
+	req.Header.SetMethod(fasthttp.MethodHead)
+
+	setHeader(&req.Header, HeaderXAmzExpectedBucketOwner, input.ExpectedBucketOwner)
+
+	return nil
+}
+
+type HeadBucketOutput struct {
+	AccessPointAlias *string
+	BucketRegion     *string
+}
+
+func (output *HeadBucketOutput) unmarshalHTTP(resp *fasthttp.Response) error {
+	switch resp.StatusCode() {
+	case fasthttp.StatusNotFound:
+		return errors.New("HeadBucket: bucket not found")
+	case fasthttp.StatusForbidden:
+		return errors.New("HeadBucket: fasthttp.StatusForbidden")
+	case fasthttp.StatusMovedPermanently:
+		return errors.New("HeadBucket: fasthttp.StatusMovedPermanently")
+	case fasthttp.StatusOK:
+		break
+	default:
+		return fmt.Errorf("HeadBucket: unexpected response: %d", resp.StatusCode())
 	}
 
-	return nil, fmt.Errorf("client.Client.HeadBucket: %w", errors.ErrUnsupported)
+	output.BucketRegion = extractHeader(&resp.Header, HeaderXAmzBucketRegion)
+	output.AccessPointAlias = extractHeader(&resp.Header, HeaderXamzAccessPointAlias)
+
+	return nil
+}
+
+func (c *Client) HeadBucket(ctx context.Context, input *HeadBucketInput, optFns ...func(*Options)) (*HeadBucketOutput, error) {
+	in := &handlerInput[*HeadBucketInput]{
+		Options:           c.options.With(optFns...),
+		SuccessStatusCode: fasthttp.StatusOK,
+		CallInput:         input,
+	}
+
+	in.InitHTTP()
+	defer in.ReleaseHTTP()
+
+	out, err := handleCall[*HeadBucketInput, *HeadBucketOutput](ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	defer out.ReleaseHTTP()
+
+	return out.CallOutput, nil
 }
