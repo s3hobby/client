@@ -54,14 +54,26 @@ func (e *ServerSideError) Error() string {
 }
 
 func NewServerSideError(resp *fasthttp.Response) (*ServerSideError, error) {
+	statusCode := resp.StatusCode()
+
 	ret := new(ServerSideError)
-
-	if err := xml.Unmarshal(resp.Body(), ret); err != nil {
-		return nil, fmt.Errorf("ServerSideError: xml error response deserializing error: %w", err)
-	}
-
+	ret.Code = fmt.Sprintf("HTTP %d", statusCode)
+	ret.RequestID = string(resp.Header.Peek(HeaderXAmzRequestID))
 	ret.Response = new(fasthttp.Response)
 	resp.CopyTo(ret.Response)
+
+	switch {
+	case fasthttp.StatusCodeIsRedirect(statusCode):
+		ret.Message = fmt.Sprintf("Please redirect to: %q", string(resp.Header.Peek(HeaderLocation)))
+	case statusCode >= 100 && statusCode < 200:
+		ret.Message = "Have receive an informational status code..."
+	case statusCode == fasthttp.StatusNoContent:
+		ret.Message = "No content from the server"
+	default:
+		if err := xml.Unmarshal(resp.Body(), ret); err != nil {
+			return nil, fmt.Errorf("ServerSideError: xml error response deserializing error: %w", err)
+		}
+	}
 
 	return ret, nil
 }
