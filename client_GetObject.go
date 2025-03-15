@@ -2,13 +2,12 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/valyala/fasthttp"
 )
 
-type HeadObjectInput struct {
+type GetObjectInput struct {
 	// Bucket is mandatory
 	Bucket string
 
@@ -24,12 +23,11 @@ type HeadObjectInput struct {
 	ResponseExpires            *string
 	VersionId                  *string
 
-	IfMatch           *string
-	IfModifiedSince   *string
-	IfNoneMatch       *string
-	IfUnmodifiedSince *string
-	Range             *string
-
+	IfMatch              *string
+	IfModifiedSince      *string
+	IfNoneMatch          *string
+	IfUnmodifiedSince    *string
+	Range                *string
 	SSECustomerAlgorithm *string
 	SSECustomerKey       *string
 	SSECustomerKeyMD5    *string
@@ -38,16 +36,16 @@ type HeadObjectInput struct {
 	ChecksumMode         *string
 }
 
-func (input *HeadObjectInput) bucket() string {
+func (input *GetObjectInput) bucket() string {
 	return input.Bucket
 }
 
-func (input *HeadObjectInput) key() string {
+func (input *GetObjectInput) key() string {
 	return input.Key
 }
 
-func (input *HeadObjectInput) marshalHTTP(req *fasthttp.Request) error {
-	req.Header.SetMethod(fasthttp.MethodHead)
+func (input *GetObjectInput) marshalHTTP(req *fasthttp.Request) error {
+	req.Header.SetMethod(fasthttp.MethodGet)
 
 	args := req.URI().QueryArgs()
 	setQuery(args, QueryPartNumber, input.PartNumber)
@@ -74,19 +72,21 @@ func (input *HeadObjectInput) marshalHTTP(req *fasthttp.Request) error {
 	return nil
 }
 
-type HeadObjectOutput struct {
-	AcceptRanges              *string
-	CacheControl              *string
-	ContentDisposition        *string
-	ContentEncoding           *string
-	ContentLanguage           *string
-	ContentLength             *string
-	ContentRange              *string
-	ContentType               *string
-	ETag                      *string
-	Expires                   *string
-	LastModified              *string
-	ArchiveStatus             *string
+type GetObjectOutput struct {
+	Body []byte
+
+	AcceptRanges       *string
+	CacheControl       *string
+	ContentDisposition *string
+	ContentEncoding    *string
+	ContentLanguage    *string
+	ContentLength      *string
+	ContentRange       *string
+	ContentType        *string
+	ETag               *string
+	Expires            *string
+	LastModified       *string
+
 	ChecksumCRC32             *string
 	ChecksumCRC32C            *string
 	ChecksumCRC64NVME         *string
@@ -109,22 +109,14 @@ type HeadObjectOutput struct {
 	SSECustomerKeyMD5         *string
 	ServerSideEncryption      *string
 	StorageClass              *string
+	TaggingCount              *string
 	VersionId                 *string
 	WebsiteRedirectLocation   *string
 }
 
-func (output *HeadObjectOutput) unmarshalHTTP(resp *fasthttp.Response) error {
-	switch resp.StatusCode() {
-	case fasthttp.StatusNotFound:
-		return errors.New("HeadObject: bucket not found")
-	case fasthttp.StatusForbidden:
-		return errors.New("HeadObject: fasthttp.StatusForbidden")
-	case fasthttp.StatusMovedPermanently:
-		return errors.New("HeadObject: fasthttp.StatusMovedPermanently")
-	case fasthttp.StatusOK:
-		break
-	default:
-		return fmt.Errorf("HeadObject: unexpected response: %d", resp.StatusCode())
+func (output *GetObjectOutput) unmarshalHTTP(resp *fasthttp.Response) error {
+	if resp.StatusCode() != fasthttp.StatusOK {
+		return fmt.Errorf("GetObject: unexpected response: %d", resp.StatusCode())
 	}
 
 	output.AcceptRanges = extractHeader(&resp.Header, HeaderAcceptRanges)
@@ -138,7 +130,7 @@ func (output *HeadObjectOutput) unmarshalHTTP(resp *fasthttp.Response) error {
 	output.ETag = extractHeader(&resp.Header, HeaderETag)
 	output.Expires = extractHeader(&resp.Header, HeaderExpires)
 	output.LastModified = extractHeader(&resp.Header, HeaderLastModified)
-	output.ArchiveStatus = extractHeader(&resp.Header, HeaderXAmzArchiveStatus)
+
 	output.ChecksumCRC32 = extractHeader(&resp.Header, HeaderXAmzChecksumCRC32)
 	output.ChecksumCRC32C = extractHeader(&resp.Header, HeaderXAmzChecksumCRC32C)
 	output.ChecksumCRC64NVME = extractHeader(&resp.Header, HeaderXAmzChecksumCRC64NVME)
@@ -161,14 +153,15 @@ func (output *HeadObjectOutput) unmarshalHTTP(resp *fasthttp.Response) error {
 	output.SSECustomerKeyMD5 = extractHeader(&resp.Header, HeaderXAmzSSECustomerKeyMD5)
 	output.ServerSideEncryption = extractHeader(&resp.Header, HeaderXAmzServerSideEncryption)
 	output.StorageClass = extractHeader(&resp.Header, HeaderXAmzStorageClass)
+	output.TaggingCount = extractHeader(&resp.Header, HeaderXAmzTaggingCount)
 	output.VersionId = extractHeader(&resp.Header, HeaderXAmzVersionId)
 	output.WebsiteRedirectLocation = extractHeader(&resp.Header, HeaderXAmzWebsiteRedirectLocation)
 
 	return nil
 }
 
-func (c *Client) HeadObject(ctx context.Context, input *HeadObjectInput, optFns ...func(*Options)) (*HeadObjectOutput, error) {
-	in := &handlerInput[*HeadObjectInput]{
+func (c *Client) GetObject(ctx context.Context, input *GetObjectInput, optFns ...func(*Options)) (*GetObjectOutput, error) {
+	in := &handlerInput[*GetObjectInput]{
 		Options:           c.options.With(optFns...),
 		SuccessStatusCode: fasthttp.StatusOK,
 		CallInput:         input,
@@ -177,7 +170,7 @@ func (c *Client) HeadObject(ctx context.Context, input *HeadObjectInput, optFns 
 	in.InitHTTP()
 	defer in.ReleaseHTTP()
 
-	out, err := handleCall[*HeadObjectInput, *HeadObjectOutput](ctx, in)
+	out, err := handleCall[*GetObjectInput, *GetObjectOutput](ctx, in)
 	if err != nil {
 		return nil, err
 	}

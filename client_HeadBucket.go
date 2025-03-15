@@ -47,7 +47,7 @@ func (output *HeadBucketOutput) unmarshalHTTP(resp *fasthttp.Response) error {
 	}
 
 	output.BucketRegion = extractHeader(&resp.Header, HeaderXAmzBucketRegion)
-	output.AccessPointAlias = extractHeader(&resp.Header, HeaderXamzAccessPointAlias)
+	output.AccessPointAlias = extractHeader(&resp.Header, HeaderXAmzAccessPointAlias)
 
 	return nil
 }
