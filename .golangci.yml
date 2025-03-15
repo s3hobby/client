@@ -6,6 +6,9 @@ issues:
         - dupl
         - gosec
         - goconst
+    - path: ^client_.*\.go
+      linters:
+        - dupl
 linters:
   enable:
     - asciicheck
