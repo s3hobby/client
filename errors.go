@@ -53,7 +53,7 @@ func (e *ServerSideError) Error() string {
 	)
 }
 
-func NewServerSideError(resp *fasthttp.Response) (*ServerSideError, error) {
+func NewServerSideError(resp *fasthttp.Response) *ServerSideError {
 	statusCode := resp.StatusCode()
 
 	ret := new(ServerSideError)
@@ -71,9 +71,9 @@ func NewServerSideError(resp *fasthttp.Response) (*ServerSideError, error) {
 		ret.Message = "No content from the server"
 	default:
 		if err := xml.Unmarshal(resp.Body(), ret); err != nil {
-			return nil, fmt.Errorf("ServerSideError: xml error response deserializing error: %w", err)
+			ret.Message = fmt.Sprintf("xml error response deserializing error: %v", err)
 		}
 	}
 
-	return ret, nil
+	return ret
 }

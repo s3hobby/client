@@ -2,10 +2,11 @@ package client
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/valyala/fasthttp"
 )
+
+var _ RequiredBucketKeyInterface = (*PutObjectInput)(nil)
 
 type PutObjectInput struct {
 	// Bucket is mandatory
@@ -55,15 +56,15 @@ type PutObjectInput struct {
 	WriteOffsetBytes          *string
 }
 
-func (input *PutObjectInput) bucket() string {
+func (input *PutObjectInput) GetBucket() string {
 	return input.Bucket
 }
 
-func (input *PutObjectInput) key() string {
+func (input *PutObjectInput) GetKey() string {
 	return input.Key
 }
 
-func (input *PutObjectInput) marshalHTTP(req *fasthttp.Request) error {
+func (input *PutObjectInput) MarshalHTTP(req *fasthttp.Request) error {
 	req.Header.SetMethod(fasthttp.MethodPut)
 
 	req.ResetBody()
@@ -132,9 +133,9 @@ type PutObjectOutput struct {
 	VersionId               *string
 }
 
-func (output *PutObjectOutput) unmarshalHTTP(resp *fasthttp.Response) error {
+func (output *PutObjectOutput) UnmarshalHTTP(resp *fasthttp.Response) error {
 	if resp.StatusCode() != fasthttp.StatusOK {
-		return fmt.Errorf("PutObject: unexpected response: %d", resp.StatusCode())
+		return NewServerSideError(resp)
 	}
 
 	output.ETag = extractHeader(&resp.Header, HeaderETag)
@@ -159,20 +160,5 @@ func (output *PutObjectOutput) unmarshalHTTP(resp *fasthttp.Response) error {
 }
 
 func (c *Client) PutObject(ctx context.Context, input *PutObjectInput, optFns ...func(*Options)) (*PutObjectOutput, error) {
-	in := &handlerInput[*PutObjectInput]{
-		Options:           c.options.With(optFns...),
-		SuccessStatusCode: fasthttp.StatusOK,
-		CallInput:         input,
-	}
-
-	in.InitHTTP()
-	defer in.ReleaseHTTP()
-
-	out, err := handleCall[*PutObjectInput, *PutObjectOutput](ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	defer out.ReleaseHTTP()
-
-	return out.CallOutput, nil
+	return PerformCall[*PutObjectInput, *PutObjectOutput](ctx, c, input, optFns...)
 }

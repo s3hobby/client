@@ -19,7 +19,7 @@ type noMandatoryInput struct {
 	HeaderValue string
 }
 
-func (input *noMandatoryInput) marshalHTTP(req *fasthttp.Request) error {
+func (input *noMandatoryInput) MarshalHTTP(req *fasthttp.Request) error {
 	req.Header.SetMethod(fasthttp.MethodPost)
 	req.Header.Set("x-header-value", input.HeaderValue)
 	req.URI().QueryArgs().Set("query-value", input.QueryValue)
@@ -30,7 +30,7 @@ type noMandatoryOutput struct {
 	OneOutput string
 }
 
-func (output *noMandatoryOutput) unmarshalHTTP(resp *fasthttp.Response) error {
+func (output *noMandatoryOutput) UnmarshalHTTP(resp *fasthttp.Response) error {
 	if resp.StatusCode() != fasthttp.StatusNoContent {
 		return fmt.Errorf("noResourceOutput: bad HTTP status code: %d", resp.StatusCode())
 	}
@@ -42,25 +42,29 @@ func (output *noMandatoryOutput) unmarshalHTTP(resp *fasthttp.Response) error {
 	return nil
 }
 
+var _ RequiredBucketInterface = (*mandatoryBucketInput)(nil)
+
 type mandatoryBucketInput struct {
 	noMandatoryInput
 	Bucket string
 }
 
-func (input *mandatoryBucketInput) bucket() string {
+func (input *mandatoryBucketInput) GetBucket() string {
 	return input.Bucket
 }
+
+var _ RequiredBucketKeyInterface = (*mandatoryKeyInput)(nil)
 
 type mandatoryKeyInput struct {
 	mandatoryBucketInput
 	Key string
 }
 
-func (input *mandatoryKeyInput) key() string {
+func (input *mandatoryKeyInput) GetKey() string {
 	return input.Key
 }
 
-func testHandleCall_ok[Input httpRequestMarshaler](t *testing.T, apiIn Input, expectedURI string) {
+func testHandleCall_ok[Input HttpRequestMarshaler](t *testing.T, apiIn Input, expectedURI string) {
 	expectedOut := &noMandatoryOutput{
 		OneOutput: uuid.NewString(),
 	}
@@ -73,44 +77,31 @@ func testHandleCall_ok[Input httpRequestMarshaler](t *testing.T, apiIn Input, ex
 	})
 	defer srv.Close()
 
-	in := &handlerInput[Input]{
-		Options: &Options{
-			SiginingRegion:   "dev-1",
-			EndpointHost:     "s3.dev-1.example.com",
-			Signer:           signer.NewAnonymousSigner(),
-			HTTPClient:       srv.Client(),
-			EndpointResolver: DefaultEndpointResolver,
-		},
-		SuccessStatusCode: fasthttp.StatusNoContent,
-		CallInput:         apiIn,
-	}
-	in.InitHTTP()
-	defer in.ReleaseHTTP()
-
-	out, err := handleCall[Input, *noMandatoryOutput](t.Context(), in)
+	c, err := New(&Options{
+		SiginingRegion:   "dev-1",
+		EndpointHost:     "s3.dev-1.example.com",
+		Signer:           signer.NewAnonymousSigner(),
+		HTTPClient:       srv.Client(),
+		EndpointResolver: DefaultEndpointResolver,
+	})
 	require.NoError(t, err)
-	defer out.ReleaseHTTP()
 
-	require.NotNil(t, out)
-	require.Equal(t, expectedOut, out.CallOutput)
+	out, err := PerformCall[Input, *noMandatoryOutput](t.Context(), c, apiIn)
+	require.NoError(t, err)
+	require.Equal(t, expectedOut, out)
 }
 
-func testHandleCall_ko[Input httpRequestMarshaler](t *testing.T, apiIn Input, expectedError error) {
-	in := &handlerInput[Input]{
-		Options: &Options{
-			SiginingRegion:   "dev-1",
-			EndpointHost:     "s3.dev-1.example.com",
-			Signer:           signer.NewAnonymousSigner(),
-			HTTPClient:       DefaultHTTPClient,
-			EndpointResolver: DefaultEndpointResolver,
-		},
-		SuccessStatusCode: fasthttp.StatusNoContent,
-		CallInput:         apiIn,
-	}
-	in.InitHTTP()
-	defer in.ReleaseHTTP()
+func testHandleCall_ko[Input HttpRequestMarshaler](t *testing.T, apiIn Input, expectedError error) {
+	c, err := New(&Options{
+		SiginingRegion:   "dev-1",
+		EndpointHost:     "s3.dev-1.example.com",
+		Signer:           signer.NewAnonymousSigner(),
+		HTTPClient:       DefaultHTTPClient,
+		EndpointResolver: DefaultEndpointResolver,
+	})
+	require.NoError(t, err)
 
-	out, err := handleCall[Input, *noMandatoryOutput](t.Context(), in)
+	out, err := PerformCall[Input, *noMandatoryOutput](t.Context(), c, apiIn)
 	require.Error(t, err)
 	require.Nil(t, out)
 

@@ -12,28 +12,27 @@ import (
 
 type Handler[Input any, Output any] = chain_of_responsibility.Handler[*handlerInput[Input], *handlerOutput[Output]]
 
-type httpRequestMarshaler interface {
-	marshalHTTP(req *fasthttp.Request) error
+type HttpRequestMarshaler interface {
+	MarshalHTTP(req *fasthttp.Request) error
 }
 
-type httpRequestUnmarshaler interface {
-	unmarshalHTTP(resp *fasthttp.Response) error
+type HttpRequestUnmarshaler interface {
+	UnmarshalHTTP(resp *fasthttp.Response) error
 }
 
-type requiredBucketInterface interface {
-	bucket() string
+type RequiredBucketInterface interface {
+	GetBucket() string
 }
 
-type requiredBucketKeyInterface interface {
-	requiredBucketInterface
-	key() string
+var _ RequiredBucketInterface = (RequiredBucketKeyInterface)(nil)
+
+type RequiredBucketKeyInterface interface {
+	RequiredBucketInterface
+	GetKey() string
 }
 
 type handlerInput[Input any] struct {
-	// OperationName     string
-	Options           *Options
-	SuccessStatusCode int
-
+	Options       *Options
 	CallInput     Input
 	ServerRequest *fasthttp.Request
 }
@@ -77,34 +76,6 @@ func (*httpRequesterHandler[Input, OutputBase, OutputPtr]) Handle(ctx context.Co
 	if err := input.Options.HTTPClient.Do(input.ServerRequest, output.ServerResponse); err != nil {
 		output.ReleaseHTTP()
 		return nil, fmt.Errorf("HTTP request error: %v", err)
-	}
-
-	return output, nil
-}
-
-func handleCall[
-	Input httpRequestMarshaler,
-	OutputPtr interface {
-		httpRequestUnmarshaler
-		*OutputBase
-	},
-	OutputBase any,
-](ctx context.Context, input *handlerInput[Input]) (*handlerOutput[OutputPtr], error) {
-	chain := chain_of_responsibility.NewChain(
-		&httpRequesterHandler[Input, OutputBase, OutputPtr]{},
-		&errorMiddleware[Input, OutputPtr]{},
-		&configValidationMiddleware[Input, OutputPtr]{},
-		&requiredInputMiddleware[Input, OutputPtr]{},
-		&userAgentMiddleware[Input, OutputPtr]{},
-		&resolveEndpointMiddleware[Input, OutputPtr]{},
-		&transportMiddleware[Input, OutputPtr]{},
-		&signerMiddleware[Input, OutputPtr]{},
-		&serverSideErrorMiddleware[Input, OutputPtr]{},
-	)
-
-	output, err := chain.Handle(ctx, input)
-	if err != nil {
-		return nil, err
 	}
 
 	return output, nil
@@ -157,11 +128,11 @@ func (*resolveEndpointMiddleware[Input, Output]) Middleware(ctx context.Context,
 		UsePathStyle: input.Options.UsePathStyle,
 	}
 
-	if v, ok := interface{}(input.CallInput).(requiredBucketKeyInterface); ok {
-		params.Bucket = v.bucket()
-		params.Key = v.key()
-	} else if v, ok := interface{}(input.CallInput).(requiredBucketInterface); ok {
-		params.Bucket = v.bucket()
+	if v, ok := interface{}(input.CallInput).(RequiredBucketKeyInterface); ok {
+		params.Bucket = v.GetBucket()
+		params.Key = v.GetKey()
+	} else if v, ok := interface{}(input.CallInput).(RequiredBucketInterface); ok {
+		params.Bucket = v.GetBucket()
 	}
 
 	endpoint, err := input.Options.EndpointResolver.ResolveEndpoint(ctx, params)
@@ -184,10 +155,10 @@ func (*signerMiddleware[Input, Output]) Middleware(ctx context.Context, input *h
 	return next.Handle(ctx, input)
 }
 
-type transportMiddleware[Input httpRequestMarshaler, Output httpRequestUnmarshaler] struct{}
+type transportMiddleware[Input HttpRequestMarshaler, Output HttpRequestUnmarshaler] struct{}
 
 func (*transportMiddleware[Input, Output]) Middleware(ctx context.Context, input *handlerInput[Input], next Handler[Input, Output]) (*handlerOutput[Output], error) {
-	if err := input.CallInput.marshalHTTP(input.ServerRequest); err != nil {
+	if err := input.CallInput.MarshalHTTP(input.ServerRequest); err != nil {
 		return nil, fmt.Errorf("HTTP marshaling error: %v", err)
 	}
 
@@ -196,7 +167,7 @@ func (*transportMiddleware[Input, Output]) Middleware(ctx context.Context, input
 		return nil, err
 	}
 
-	if err = output.CallOutput.unmarshalHTTP(output.ServerResponse); err != nil {
+	if err = output.CallOutput.UnmarshalHTTP(output.ServerResponse); err != nil {
 		return nil, fmt.Errorf("HTTP unmarshalling error: %v", err)
 	}
 
@@ -206,40 +177,19 @@ func (*transportMiddleware[Input, Output]) Middleware(ctx context.Context, input
 type requiredInputMiddleware[Input any, Output any] struct{}
 
 func (*requiredInputMiddleware[Input, Output]) Middleware(ctx context.Context, input *handlerInput[Input], next Handler[Input, Output]) (*handlerOutput[Output], error) {
-	if v, ok := interface{}(input.CallInput).(requiredBucketKeyInterface); ok {
-		if v.bucket() == "" {
+	if v, ok := interface{}(input.CallInput).(RequiredBucketKeyInterface); ok {
+		if v.GetBucket() == "" {
 			return nil, errors.New("bucket is mandatory")
 		}
 
-		if v.key() == "" {
+		if v.GetKey() == "" {
 			return nil, errors.New("object key is mandatory")
 		}
-	} else if v, ok := interface{}(input.CallInput).(requiredBucketInterface); ok {
-		if v.bucket() == "" {
+	} else if v, ok := interface{}(input.CallInput).(RequiredBucketInterface); ok {
+		if v.GetBucket() == "" {
 			return nil, errors.New("bucket is mandatory")
 		}
 	}
 
 	return next.Handle(ctx, input)
-}
-
-type serverSideErrorMiddleware[Input any, Output any] struct{}
-
-func (*serverSideErrorMiddleware[Input, Output]) Middleware(ctx context.Context, input *handlerInput[Input], next Handler[Input, Output]) (*handlerOutput[Output], error) {
-	output, err := next.Handle(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-
-	statusCode := output.ServerResponse.StatusCode()
-	if statusCode == input.SuccessStatusCode {
-		return output, nil
-	}
-
-	sse, err := NewServerSideError(output.ServerResponse)
-	if err != nil {
-		return nil, err
-	}
-
-	return nil, sse
 }

@@ -2,10 +2,11 @@ package client
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/valyala/fasthttp"
 )
+
+var _ RequiredBucketKeyInterface = (*GetObjectInput)(nil)
 
 type GetObjectInput struct {
 	// Bucket is mandatory
@@ -36,15 +37,15 @@ type GetObjectInput struct {
 	ChecksumMode         *string
 }
 
-func (input *GetObjectInput) bucket() string {
+func (input *GetObjectInput) GetBucket() string {
 	return input.Bucket
 }
 
-func (input *GetObjectInput) key() string {
+func (input *GetObjectInput) GetKey() string {
 	return input.Key
 }
 
-func (input *GetObjectInput) marshalHTTP(req *fasthttp.Request) error {
+func (input *GetObjectInput) MarshalHTTP(req *fasthttp.Request) error {
 	req.Header.SetMethod(fasthttp.MethodGet)
 
 	args := req.URI().QueryArgs()
@@ -114,9 +115,9 @@ type GetObjectOutput struct {
 	WebsiteRedirectLocation   *string
 }
 
-func (output *GetObjectOutput) unmarshalHTTP(resp *fasthttp.Response) error {
+func (output *GetObjectOutput) UnmarshalHTTP(resp *fasthttp.Response) error {
 	if resp.StatusCode() != fasthttp.StatusOK {
-		return fmt.Errorf("GetObject: unexpected response: %d", resp.StatusCode())
+		return NewServerSideError(resp)
 	}
 
 	output.AcceptRanges = extractHeader(&resp.Header, HeaderAcceptRanges)
@@ -161,20 +162,5 @@ func (output *GetObjectOutput) unmarshalHTTP(resp *fasthttp.Response) error {
 }
 
 func (c *Client) GetObject(ctx context.Context, input *GetObjectInput, optFns ...func(*Options)) (*GetObjectOutput, error) {
-	in := &handlerInput[*GetObjectInput]{
-		Options:           c.options.With(optFns...),
-		SuccessStatusCode: fasthttp.StatusOK,
-		CallInput:         input,
-	}
-
-	in.InitHTTP()
-	defer in.ReleaseHTTP()
-
-	out, err := handleCall[*GetObjectInput, *GetObjectOutput](ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	defer out.ReleaseHTTP()
-
-	return out.CallOutput, nil
+	return PerformCall[*GetObjectInput, *GetObjectOutput](ctx, c, input, optFns...)
 }
