@@ -2,11 +2,11 @@ package client
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
 	"github.com/valyala/fasthttp"
 )
+
+var _ RequiredBucketKeyInterface = (*HeadObjectInput)(nil)
 
 type HeadObjectInput struct {
 	// Bucket is mandatory
@@ -38,15 +38,15 @@ type HeadObjectInput struct {
 	ChecksumMode         *string
 }
 
-func (input *HeadObjectInput) bucket() string {
+func (input *HeadObjectInput) GetBucket() string {
 	return input.Bucket
 }
 
-func (input *HeadObjectInput) key() string {
+func (input *HeadObjectInput) GetKey() string {
 	return input.Key
 }
 
-func (input *HeadObjectInput) marshalHTTP(req *fasthttp.Request) error {
+func (input *HeadObjectInput) MarshalHTTP(req *fasthttp.Request) error {
 	req.Header.SetMethod(fasthttp.MethodHead)
 
 	args := req.URI().QueryArgs()
@@ -113,18 +113,9 @@ type HeadObjectOutput struct {
 	WebsiteRedirectLocation   *string
 }
 
-func (output *HeadObjectOutput) unmarshalHTTP(resp *fasthttp.Response) error {
-	switch resp.StatusCode() {
-	case fasthttp.StatusNotFound:
-		return errors.New("HeadObject: bucket not found")
-	case fasthttp.StatusForbidden:
-		return errors.New("HeadObject: fasthttp.StatusForbidden")
-	case fasthttp.StatusMovedPermanently:
-		return errors.New("HeadObject: fasthttp.StatusMovedPermanently")
-	case fasthttp.StatusOK:
-		break
-	default:
-		return fmt.Errorf("HeadObject: unexpected response: %d", resp.StatusCode())
+func (output *HeadObjectOutput) UnmarshalHTTP(resp *fasthttp.Response) error {
+	if resp.StatusCode() != fasthttp.StatusOK {
+		return NewServerSideError(resp)
 	}
 
 	output.AcceptRanges = extractHeader(&resp.Header, HeaderAcceptRanges)
@@ -168,20 +159,5 @@ func (output *HeadObjectOutput) unmarshalHTTP(resp *fasthttp.Response) error {
 }
 
 func (c *Client) HeadObject(ctx context.Context, input *HeadObjectInput, optFns ...func(*Options)) (*HeadObjectOutput, error) {
-	in := &handlerInput[*HeadObjectInput]{
-		Options:           c.options.With(optFns...),
-		SuccessStatusCode: fasthttp.StatusOK,
-		CallInput:         input,
-	}
-
-	in.InitHTTP()
-	defer in.ReleaseHTTP()
-
-	out, err := handleCall[*HeadObjectInput, *HeadObjectOutput](ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	defer out.ReleaseHTTP()
-
-	return out.CallOutput, nil
+	return PerformCall[*HeadObjectInput, *HeadObjectOutput](ctx, c, input, optFns...)
 }

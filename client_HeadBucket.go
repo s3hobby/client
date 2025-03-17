@@ -2,11 +2,11 @@ package client
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
 	"github.com/valyala/fasthttp"
 )
+
+var _ RequiredBucketInterface = (*HeadBucketInput)(nil)
 
 type HeadBucketInput struct {
 	// Bucket is mandatory
@@ -15,11 +15,11 @@ type HeadBucketInput struct {
 	ExpectedBucketOwner *string
 }
 
-func (input *HeadBucketInput) bucket() string {
+func (input *HeadBucketInput) GetBucket() string {
 	return input.Bucket
 }
 
-func (input *HeadBucketInput) marshalHTTP(req *fasthttp.Request) error {
+func (input *HeadBucketInput) MarshalHTTP(req *fasthttp.Request) error {
 	req.Header.SetMethod(fasthttp.MethodHead)
 
 	setHeader(&req.Header, HeaderXAmzExpectedBucketOwner, input.ExpectedBucketOwner)
@@ -32,18 +32,9 @@ type HeadBucketOutput struct {
 	BucketRegion     *string
 }
 
-func (output *HeadBucketOutput) unmarshalHTTP(resp *fasthttp.Response) error {
-	switch resp.StatusCode() {
-	case fasthttp.StatusNotFound:
-		return errors.New("HeadBucket: bucket not found")
-	case fasthttp.StatusForbidden:
-		return errors.New("HeadBucket: fasthttp.StatusForbidden")
-	case fasthttp.StatusMovedPermanently:
-		return errors.New("HeadBucket: fasthttp.StatusMovedPermanently")
-	case fasthttp.StatusOK:
-		break
-	default:
-		return fmt.Errorf("HeadBucket: unexpected response: %d", resp.StatusCode())
+func (output *HeadBucketOutput) UnmarshalHTTP(resp *fasthttp.Response) error {
+	if resp.StatusCode() != fasthttp.StatusOK {
+		return NewServerSideError(resp)
 	}
 
 	output.BucketRegion = extractHeader(&resp.Header, HeaderXAmzBucketRegion)
@@ -53,20 +44,5 @@ func (output *HeadBucketOutput) unmarshalHTTP(resp *fasthttp.Response) error {
 }
 
 func (c *Client) HeadBucket(ctx context.Context, input *HeadBucketInput, optFns ...func(*Options)) (*HeadBucketOutput, error) {
-	in := &handlerInput[*HeadBucketInput]{
-		Options:           c.options.With(optFns...),
-		SuccessStatusCode: fasthttp.StatusOK,
-		CallInput:         input,
-	}
-
-	in.InitHTTP()
-	defer in.ReleaseHTTP()
-
-	out, err := handleCall[*HeadBucketInput, *HeadBucketOutput](ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	defer out.ReleaseHTTP()
-
-	return out.CallOutput, nil
+	return PerformCall[*HeadBucketInput, *HeadBucketOutput](ctx, c, input, optFns...)
 }
