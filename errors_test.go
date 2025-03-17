@@ -24,9 +24,7 @@ func TestServerSideError(t *testing.T) {
 			<HostId>` + expected.HostID + `</HostId>
 		</Error>`))
 
-		actual, err := NewServerSideError(resp)
-		require.NoError(t, err)
-
+		actual := NewServerSideError(resp)
 		actual.Response = nil
 
 		require.Equal(t, expected, actual)
