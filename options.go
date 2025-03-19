@@ -27,6 +27,8 @@ type Options struct {
 
 	Signer signer.Signer `validate:"required"`
 
+	Credentials *signer.Credentials
+
 	// HTTPClient default to [DefaultHTTPClient].
 	HTTPClient HTTPClient `validate:"required"`
 }

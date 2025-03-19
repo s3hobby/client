@@ -54,6 +54,12 @@ type PutObjectInput struct {
 	Tagging                   *string
 	WebsiteRedirectLocation   *string
 	WriteOffsetBytes          *string
+
+	TrailerChecksumCRC32     *string
+	TrailerChecksumCRC64NVME *string
+	TrailerChecksumSHA1      *string
+	TrailerChecksumCRC32C    *string
+	TrailerChecksumSHA256    *string
 }
 
 func (input *PutObjectInput) GetBucket() string {
@@ -83,11 +89,11 @@ func (input *PutObjectInput) MarshalHTTP(req *fasthttp.Request) error {
 	setHeader(&req.Header, HeaderIfNoneMatch, input.IfNoneMatch)
 
 	setHeader(&req.Header, HeaderXAmzACL, input.ACL)
-	setHeader(&req.Header, HeaderXAmzChecksumCRC32, input.ChecksumCRC32)
-	setHeader(&req.Header, HeaderXAmzChecksumCRC32C, input.ChecksumCRC32C)
-	setHeader(&req.Header, HeaderXAmzChecksumCRC64NVME, input.ChecksumCRC64NVME)
-	setHeader(&req.Header, HeaderXAmzChecksumSHA1, input.ChecksumSHA1)
-	setHeader(&req.Header, HeaderXAmzChecksumSHA256, input.ChecksumSHA256)
+	setHeaderOrTrailer(&req.Header, HeaderXAmzChecksumCRC32, input.ChecksumCRC32, input.TrailerChecksumCRC32)
+	setHeaderOrTrailer(&req.Header, HeaderXAmzChecksumCRC32C, input.ChecksumCRC32C, input.TrailerChecksumCRC32C)
+	setHeaderOrTrailer(&req.Header, HeaderXAmzChecksumCRC64NVME, input.ChecksumCRC64NVME, input.TrailerChecksumCRC64NVME)
+	setHeaderOrTrailer(&req.Header, HeaderXAmzChecksumSHA1, input.ChecksumSHA1, input.TrailerChecksumSHA1)
+	setHeaderOrTrailer(&req.Header, HeaderXAmzChecksumSHA256, input.ChecksumSHA256, input.TrailerChecksumSHA256)
 	setHeader(&req.Header, HeaderXAmzExpectedBucketOwner, input.ExpectedBucketOwner)
 	setHeader(&req.Header, HeaderXAmzGrantFullControl, input.GrantFullControl)
 	setHeader(&req.Header, HeaderXAmzGrantReadACP, input.GrantReadACP)

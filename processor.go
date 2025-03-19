@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	chain_of_responsibility "github.com/s3hobby/client/pkg/design-patterns/chain-of-responsibility"
 
@@ -148,7 +149,7 @@ func (*resolveEndpointMiddleware[Input, Output]) Middleware(ctx context.Context,
 type signerMiddleware[Input any, Output any] struct{}
 
 func (*signerMiddleware[Input, Output]) Middleware(ctx context.Context, input *handlerInput[Input], next Handler[Input, Output]) (*handlerOutput[Output], error) {
-	if err := input.Options.Signer.Sign(input.ServerRequest, input.Options.SiginingRegion); err != nil {
+	if _, _, err := input.Options.Signer.Sign(input.ServerRequest, input.Options.Credentials, input.Options.SiginingRegion, time.Now()); err != nil {
 		return nil, fmt.Errorf("cannot sign the request: %v", err)
 	}
 
