@@ -168,7 +168,9 @@ func (*transportMiddleware[Input, Output]) Middleware(ctx context.Context, input
 	}
 
 	if err = output.CallOutput.UnmarshalHTTP(output.ServerResponse); err != nil {
-		return nil, fmt.Errorf("HTTP unmarshalling error: %v", err)
+		// Do not wrap error since an unexpected HTTP status code can make
+		// UnmarshalHTTP to return a server-side error.
+		return nil, err
 	}
 
 	return output, nil
