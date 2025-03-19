@@ -10,13 +10,15 @@ import (
 func TestServerSideError(t *testing.T) {
 	t.Run("response", func(t *testing.T) {
 		expected := &ServerSideError{
-			Code:      "my-code",
-			Message:   "my-message",
-			RequestID: "my-request-id",
-			HostID:    "my-host-id",
+			Code:       "my-code",
+			Message:    "my-message",
+			RequestID:  "my-request-id",
+			HostID:     "my-host-id",
+			StatusCode: fasthttp.StatusBadRequest,
 		}
 
 		resp := new(fasthttp.Response)
+		resp.SetStatusCode(expected.StatusCode)
 		resp.SetBody([]byte(`<Error>
 			<Code>` + expected.Code + `</Code>
 			<Message>` + expected.Message + `</Message>
@@ -40,7 +42,7 @@ func TestServerSideError(t *testing.T) {
 
 		require.Equal(
 			t,
-			"server-side error occurred (Code:my-code) (RequestID:my-request-id) (HostID:my-host-id): my-message",
+			"server-side error occurred (ErrorCode:my-code) (RequestID:my-request-id) (HostID:my-host-id): my-message",
 			sse.Error(),
 		)
 	})
