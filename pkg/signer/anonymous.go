@@ -1,6 +1,10 @@
 package signer
 
-import "github.com/valyala/fasthttp"
+import (
+	"time"
+
+	"github.com/valyala/fasthttp"
+)
 
 func NewAnonymousSigner() Signer {
 	return &anonymousSigner{}
@@ -9,6 +13,6 @@ func NewAnonymousSigner() Signer {
 type anonymousSigner struct {
 }
 
-func (*anonymousSigner) Sign(*fasthttp.Request, string) error {
+func (*anonymousSigner) Sign(*fasthttp.Request, string, time.Time) error {
 	return nil
 }
