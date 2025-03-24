@@ -33,7 +33,7 @@ type Options struct {
 
 // With return a new instance of [Options] with applied transformations.
 func (opts *Options) With(optFns ...func(*Options)) *Options {
-	var ret Options = *opts
+	ret := *opts
 
 	for _, fn := range optFns {
 		fn(&ret)
