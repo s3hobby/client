@@ -18,4 +18,8 @@ type Owner struct {
 	ID          *string
 }
 
+type CreateBucketConfiguration struct {
+	LocationConstraint *LocationConstraint
+}
+
 type LocationConstraint string
