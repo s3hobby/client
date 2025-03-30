@@ -17,3 +17,5 @@ type Owner struct {
 	DisplayName *string
 	ID          *string
 }
+
+type LocationConstraint string
