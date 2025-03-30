@@ -35,34 +35,12 @@ type RequiredBucketKeyInterface interface {
 type handlerInput[Input any] struct {
 	Options       *Options
 	CallInput     Input
-	ServerRequest *fasthttp.Request
-}
-
-func (input *handlerInput[Input]) InitHTTP() {
-	input.ServerRequest = fasthttp.AcquireRequest()
-}
-
-func (input *handlerInput[Input]) ReleaseHTTP() {
-	if input.ServerRequest == nil {
-		return
-	}
-
-	fasthttp.ReleaseRequest(input.ServerRequest)
-	input.ServerRequest = nil
+	ServerRequest fasthttp.Request
 }
 
 type handlerOutput[Output any] struct {
 	CallOutput     Output
 	ServerResponse *fasthttp.Response
-}
-
-func (output *handlerOutput[Output]) ReleaseHTTP() {
-	if output.ServerResponse == nil {
-		return
-	}
-
-	fasthttp.ReleaseResponse(output.ServerResponse)
-	output.ServerResponse = nil
 }
 
 type httpRequesterHandler[Input any, OutputBase any, OutputPtr *OutputBase] struct{}
@@ -71,11 +49,10 @@ func (*httpRequesterHandler[Input, OutputBase, OutputPtr]) Handle(ctx context.Co
 	var callOutputBase OutputBase
 	output := &handlerOutput[OutputPtr]{
 		CallOutput:     &callOutputBase,
-		ServerResponse: fasthttp.AcquireResponse(),
+		ServerResponse: &fasthttp.Response{},
 	}
 
-	if err := input.Options.HTTPClient.Do(input.ServerRequest, output.ServerResponse); err != nil {
-		output.ReleaseHTTP()
+	if err := input.Options.HTTPClient.Do(&input.ServerRequest, output.ServerResponse); err != nil {
 		return nil, fmt.Errorf("HTTP request error: %v", err)
 	}
 
@@ -149,7 +126,7 @@ func (*resolveEndpointMiddleware[Input, Output]) Middleware(ctx context.Context,
 type signerMiddleware[Input any, Output any] struct{}
 
 func (*signerMiddleware[Input, Output]) Middleware(ctx context.Context, input *handlerInput[Input], next Handler[Input, Output]) (*handlerOutput[Output], error) {
-	if _, _, err := input.Options.Signer.Sign(input.ServerRequest, input.Options.Credentials, input.Options.SiginingRegion, time.Now()); err != nil {
+	if _, _, err := input.Options.Signer.Sign(&input.ServerRequest, input.Options.Credentials, input.Options.SiginingRegion, time.Now()); err != nil {
 		return nil, fmt.Errorf("cannot sign the request: %v", err)
 	}
 
@@ -159,22 +136,21 @@ func (*signerMiddleware[Input, Output]) Middleware(ctx context.Context, input *h
 type transportMiddleware[Input HttpRequestMarshaler, Output HttpRequestUnmarshaler] struct{}
 
 func (*transportMiddleware[Input, Output]) Middleware(ctx context.Context, input *handlerInput[Input], next Handler[Input, Output]) (*handlerOutput[Output], error) {
-	if err := input.CallInput.MarshalHTTP(input.ServerRequest); err != nil {
+	if err := input.CallInput.MarshalHTTP(&input.ServerRequest); err != nil {
 		return nil, fmt.Errorf("HTTP marshaling error: %v", err)
 	}
 
 	output, err := next.Handle(ctx, input)
 	if err != nil {
-		return nil, err
+		return output, err
 	}
 
-	if err = output.CallOutput.UnmarshalHTTP(output.ServerResponse); err != nil {
-		// Do not wrap error since an unexpected HTTP status code can make
-		// UnmarshalHTTP to return a server-side error.
-		return nil, err
-	}
+	// Do not wrap error since an unexpected HTTP status code can make
+	// UnmarshalHTTP to return a server-side error.
+	err = output.CallOutput.UnmarshalHTTP(output.ServerResponse)
 
-	return output, nil
+	// Keep output since it hold
+	return output, err
 }
 
 type requiredInputMiddleware[Input any, Output any] struct{}

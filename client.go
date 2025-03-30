@@ -42,9 +42,6 @@ func PerformCall[
 		CallInput: input,
 	}
 
-	in.InitHTTP()
-	defer in.ReleaseHTTP()
-
 	chain := chain_of_responsibility.NewChain(
 		&httpRequesterHandler[Input, OutputBase, OutputPtr]{},
 		&errorMiddleware[Input, OutputPtr]{},
@@ -54,14 +51,12 @@ func PerformCall[
 		&resolveEndpointMiddleware[Input, OutputPtr]{},
 		&transportMiddleware[Input, OutputPtr]{},
 		&signerMiddleware[Input, OutputPtr]{},
-		// &serverSideErrorMiddleware[Input, OutputPtr]{},
 	)
 
 	out, err := chain.Handle(ctx, in)
 	if err != nil {
 		return nil, err
 	}
-	defer out.ReleaseHTTP()
 
 	return out.CallOutput, nil
 }
