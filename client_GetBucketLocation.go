@@ -13,7 +13,7 @@ type GetBucketLocationInput struct {
 	// Bucket is mandatory
 	Bucket string
 
-	ExpectedBucket *string
+	ExpectedBucketOwner *string
 }
 
 func (input *GetBucketLocationInput) GetBucket() string {
@@ -25,7 +25,7 @@ func (input *GetBucketLocationInput) MarshalHTTP(req *fasthttp.Request) error {
 
 	req.URI().QueryArgs().SetNoValue(QueryLocation)
 
-	setHeader(&req.Header, HeaderXAmzExpectedBucketOwner, input.ExpectedBucket)
+	setHeader(&req.Header, HeaderXAmzExpectedBucketOwner, input.ExpectedBucketOwner)
 
 	return nil
 }

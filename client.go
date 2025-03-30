@@ -37,9 +37,9 @@ type Metadata struct {
 }
 
 func PerformCall[
-	Input HttpRequestMarshaler,
+	Input HTTPRequestMarshaler,
 	OutputPtr interface {
-		HttpRequestUnmarshaler
+		HTTPResponseUnmarshaler
 		*OutputBase
 	},
 	OutputBase any,

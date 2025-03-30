@@ -13,11 +13,11 @@ import (
 
 type Handler[Input any, Output any] = chain_of_responsibility.Handler[*handlerInput[Input], *handlerOutput[Output]]
 
-type HttpRequestMarshaler interface {
+type HTTPRequestMarshaler interface {
 	MarshalHTTP(req *fasthttp.Request) error
 }
 
-type HttpRequestUnmarshaler interface {
+type HTTPResponseUnmarshaler interface {
 	UnmarshalHTTP(resp *fasthttp.Response) error
 }
 
@@ -132,10 +132,10 @@ func (*signerMiddleware[Input, Output]) Middleware(ctx context.Context, input *h
 }
 
 type transportMiddleware[
-	Input HttpRequestMarshaler,
+	Input HTTPRequestMarshaler,
 	OutputBase any,
 	OutputPtr interface {
-		HttpRequestUnmarshaler
+		HTTPResponseUnmarshaler
 		*OutputBase
 	},
 ] struct{}

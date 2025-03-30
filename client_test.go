@@ -64,7 +64,7 @@ func (input *mandatoryKeyInput) GetKey() string {
 	return input.Key
 }
 
-func testHandleCall_ok[Input HttpRequestMarshaler](t *testing.T, apiIn Input, expectedURI string) {
+func testHandleCall_ok[Input HTTPRequestMarshaler](t *testing.T, apiIn Input, expectedURI string) {
 	expectedOut := &noMandatoryOutput{
 		OneOutput: uuid.NewString(),
 	}
@@ -91,7 +91,7 @@ func testHandleCall_ok[Input HttpRequestMarshaler](t *testing.T, apiIn Input, ex
 	require.Equal(t, expectedOut, out)
 }
 
-func testHandleCall_ko[Input HttpRequestMarshaler](t *testing.T, apiIn Input, expectedError error) {
+func testHandleCall_ko[Input HTTPRequestMarshaler](t *testing.T, apiIn Input, expectedError error) {
 	c, err := New(&Options{
 		SiginingRegion:   "dev-1",
 		EndpointHost:     "s3.dev-1.example.com",
