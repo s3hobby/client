@@ -39,16 +39,14 @@ type handlerInput[Input any] struct {
 }
 
 type handlerOutput[Output any] struct {
-	CallOutput     Output
+	CallOutputV3   Output
 	ServerResponse *fasthttp.Response
 }
 
-type httpRequesterHandler[Input any, OutputBase any, OutputPtr *OutputBase] struct{}
+type httpRequesterHandler[Input any, Output any] struct{}
 
-func (*httpRequesterHandler[Input, OutputBase, OutputPtr]) Handle(ctx context.Context, input *handlerInput[Input]) (*handlerOutput[OutputPtr], error) {
-	var callOutputBase OutputBase
-	output := &handlerOutput[OutputPtr]{
-		CallOutput:     &callOutputBase,
+func (*httpRequesterHandler[Input, Output]) Handle(ctx context.Context, input *handlerInput[Input]) (*handlerOutput[Output], error) {
+	output := &handlerOutput[Output]{
 		ServerResponse: &fasthttp.Response{},
 	}
 
@@ -133,9 +131,16 @@ func (*signerMiddleware[Input, Output]) Middleware(ctx context.Context, input *h
 	return next.Handle(ctx, input)
 }
 
-type transportMiddleware[Input HttpRequestMarshaler, Output HttpRequestUnmarshaler] struct{}
+type transportMiddleware[
+	Input HttpRequestMarshaler,
+	OutputBase any,
+	OutputPtr interface {
+		HttpRequestUnmarshaler
+		*OutputBase
+	},
+] struct{}
 
-func (*transportMiddleware[Input, Output]) Middleware(ctx context.Context, input *handlerInput[Input], next Handler[Input, Output]) (*handlerOutput[Output], error) {
+func (*transportMiddleware[Input, OutputBase, OutputPtr]) Middleware(ctx context.Context, input *handlerInput[Input], next Handler[Input, OutputPtr]) (*handlerOutput[OutputPtr], error) {
 	if err := input.CallInput.MarshalHTTP(&input.ServerRequest); err != nil {
 		return nil, fmt.Errorf("HTTP marshaling error: %v", err)
 	}
@@ -145,12 +150,17 @@ func (*transportMiddleware[Input, Output]) Middleware(ctx context.Context, input
 		return output, err
 	}
 
+	var callOutputBase OutputBase
+	callOutputPtr := OutputPtr(&callOutputBase)
+
 	// Do not wrap error since an unexpected HTTP status code can make
 	// UnmarshalHTTP to return a server-side error.
-	err = output.CallOutput.UnmarshalHTTP(output.ServerResponse)
+	if err := callOutputPtr.UnmarshalHTTP(output.ServerResponse); err != nil {
+		return output, err
+	}
 
-	// Keep output since it hold
-	return output, err
+	output.CallOutputV3 = callOutputPtr
+	return output, nil
 }
 
 type requiredInputMiddleware[Input any, Output any] struct{}

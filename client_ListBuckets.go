@@ -46,6 +46,6 @@ func (output *ListBucketsOutput) UnmarshalHTTP(resp *fasthttp.Response) error {
 	return nil
 }
 
-func (c *Client) ListBuckets(ctx context.Context, input *ListBucketsInput, optFns ...func(*Options)) (*ListBucketsOutput, error) {
+func (c *Client) ListBuckets(ctx context.Context, input *ListBucketsInput, optFns ...func(*Options)) (*ListBucketsOutput, *Metadata, error) {
 	return PerformCall[*ListBucketsInput, *ListBucketsOutput](ctx, c, input, optFns...)
 }

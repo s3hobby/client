@@ -165,6 +165,6 @@ func (output *PutObjectOutput) UnmarshalHTTP(resp *fasthttp.Response) error {
 	return nil
 }
 
-func (c *Client) PutObject(ctx context.Context, input *PutObjectInput, optFns ...func(*Options)) (*PutObjectOutput, error) {
+func (c *Client) PutObject(ctx context.Context, input *PutObjectInput, optFns ...func(*Options)) (*PutObjectOutput, *Metadata, error) {
 	return PerformCall[*PutObjectInput, *PutObjectOutput](ctx, c, input, optFns...)
 }

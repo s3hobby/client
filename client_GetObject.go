@@ -161,6 +161,6 @@ func (output *GetObjectOutput) UnmarshalHTTP(resp *fasthttp.Response) error {
 	return nil
 }
 
-func (c *Client) GetObject(ctx context.Context, input *GetObjectInput, optFns ...func(*Options)) (*GetObjectOutput, error) {
+func (c *Client) GetObject(ctx context.Context, input *GetObjectInput, optFns ...func(*Options)) (*GetObjectOutput, *Metadata, error) {
 	return PerformCall[*GetObjectInput, *GetObjectOutput](ctx, c, input, optFns...)
 }

@@ -86,7 +86,7 @@ func testHandleCall_ok[Input HttpRequestMarshaler](t *testing.T, apiIn Input, ex
 	})
 	require.NoError(t, err)
 
-	out, err := PerformCall[Input, *noMandatoryOutput](t.Context(), c, apiIn)
+	out, _, err := PerformCall[Input, *noMandatoryOutput](t.Context(), c, apiIn)
 	require.NoError(t, err)
 	require.Equal(t, expectedOut, out)
 }
@@ -101,7 +101,7 @@ func testHandleCall_ko[Input HttpRequestMarshaler](t *testing.T, apiIn Input, ex
 	})
 	require.NoError(t, err)
 
-	out, err := PerformCall[Input, *noMandatoryOutput](t.Context(), c, apiIn)
+	out, _, err := PerformCall[Input, *noMandatoryOutput](t.Context(), c, apiIn)
 	require.Error(t, err)
 	require.Nil(t, out)
 

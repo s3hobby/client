@@ -158,6 +158,6 @@ func (output *HeadObjectOutput) UnmarshalHTTP(resp *fasthttp.Response) error {
 	return nil
 }
 
-func (c *Client) HeadObject(ctx context.Context, input *HeadObjectInput, optFns ...func(*Options)) (*HeadObjectOutput, error) {
+func (c *Client) HeadObject(ctx context.Context, input *HeadObjectInput, optFns ...func(*Options)) (*HeadObjectOutput, *Metadata, error) {
 	return PerformCall[*HeadObjectInput, *HeadObjectOutput](ctx, c, input, optFns...)
 }

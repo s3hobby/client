@@ -43,6 +43,6 @@ func (output *HeadBucketOutput) UnmarshalHTTP(resp *fasthttp.Response) error {
 	return nil
 }
 
-func (c *Client) HeadBucket(ctx context.Context, input *HeadBucketInput, optFns ...func(*Options)) (*HeadBucketOutput, error) {
+func (c *Client) HeadBucket(ctx context.Context, input *HeadBucketInput, optFns ...func(*Options)) (*HeadBucketOutput, *Metadata, error) {
 	return PerformCall[*HeadBucketInput, *HeadBucketOutput](ctx, c, input, optFns...)
 }
