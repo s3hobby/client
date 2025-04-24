@@ -8,6 +8,11 @@ import (
 	"github.com/valyala/fasthttp/fasthttputil"
 )
 
+type InmemoryTester interface {
+	Close()
+	Client() *fasthttp.Client
+}
+
 func NewInmemoryTester(handler func(ctx *fasthttp.RequestCtx)) InmemoryTester {
 	ret := &inmemoryTester{
 		ln: fasthttputil.NewInmemoryListener(),
@@ -23,11 +28,6 @@ func NewInmemoryTester(handler func(ctx *fasthttp.RequestCtx)) InmemoryTester {
 	}()
 
 	return ret
-}
-
-type InmemoryTester interface {
-	Close()
-	Client() *fasthttp.Client
 }
 
 type inmemoryTester struct {

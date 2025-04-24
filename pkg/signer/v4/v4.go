@@ -73,60 +73,6 @@ func (t *streamTransformer) Prepare() error {
 	return nil
 }
 
-func (t *streamTransformer) contentSHA256() string {
-	if !t.signBody {
-		return "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
-	}
-
-	if len(t.trailerName) == 0 {
-		return "STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
-	}
-
-	return "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER"
-}
-
-func (t *streamTransformer) transformedBodyLen() int {
-	const signatureSize = len(";chunk-signature=") + signatureValueLen
-
-	decodedContentLength := len(t.req.Body())
-
-	bodyLen := decodedContentLength
-	if nbChunk := decodedContentLength / chunkDataSize; nbChunk > 0 {
-		chunkSize := len(strconv.FormatInt(chunkDataSize, 16)) + len(crlf)
-		if t.signBody {
-			chunkSize += signatureSize
-		}
-		chunkSize += len(crlf)
-
-		bodyLen += nbChunk * chunkSize
-	}
-
-	if remaining := decodedContentLength % chunkDataSize; remaining > 0 {
-		bodyLen += len(strconv.FormatInt(int64(remaining), 16)) + len(crlf)
-		if t.signBody {
-			bodyLen += signatureSize
-		}
-		bodyLen += len(crlf)
-	}
-
-	bodyLen += len("0") + len(crlf)
-	if t.signBody {
-		bodyLen += signatureSize
-	}
-
-	if t.trailerName != nil {
-		bodyLen += len(t.trailerName) + len(trailerKeyValueSeparator) + len(t.trailerValue) + len(crlf)
-
-		if t.signBody {
-			bodyLen += len("x-amz-trailer-signature:") + signatureValueLen + len(crlf)
-		}
-
-		bodyLen += len(crlf)
-	}
-
-	return bodyLen
-}
-
 func (t *streamTransformer) Transform(seed, date, scope string, signingKey []byte) {
 	writeChunk := func(chunk []byte, previousSignature string) string {
 		stringToSign := fmt.Sprintf(
@@ -186,6 +132,60 @@ func (t *streamTransformer) Transform(seed, date, scope string, signingKey []byt
 	t.req.SetBody(t.buf.Bytes())
 }
 
+func (t *streamTransformer) contentSHA256() string {
+	if !t.signBody {
+		return "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+	}
+
+	if len(t.trailerName) == 0 {
+		return "STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
+	}
+
+	return "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER"
+}
+
+func (t *streamTransformer) transformedBodyLen() int {
+	const signatureSize = len(";chunk-signature=") + signatureValueLen
+
+	decodedContentLength := len(t.req.Body())
+
+	bodyLen := decodedContentLength
+	if nbChunk := decodedContentLength / chunkDataSize; nbChunk > 0 {
+		chunkSize := len(strconv.FormatInt(chunkDataSize, 16)) + len(crlf)
+		if t.signBody {
+			chunkSize += signatureSize
+		}
+		chunkSize += len(crlf)
+
+		bodyLen += nbChunk * chunkSize
+	}
+
+	if remaining := decodedContentLength % chunkDataSize; remaining > 0 {
+		bodyLen += len(strconv.FormatInt(int64(remaining), 16)) + len(crlf)
+		if t.signBody {
+			bodyLen += signatureSize
+		}
+		bodyLen += len(crlf)
+	}
+
+	bodyLen += len("0") + len(crlf)
+	if t.signBody {
+		bodyLen += signatureSize
+	}
+
+	if t.trailerName != nil {
+		bodyLen += len(t.trailerName) + len(trailerKeyValueSeparator) + len(t.trailerValue) + len(crlf)
+
+		if t.signBody {
+			bodyLen += len("x-amz-trailer-signature:") + signatureValueLen + len(crlf)
+		}
+
+		bodyLen += len(crlf)
+	}
+
+	return bodyLen
+}
+
 type HeaderSigner struct {
 	signBody       bool
 	forceStreaming bool
@@ -196,6 +196,66 @@ func NewHeaderSigner(signBody, forceStreaming bool) *HeaderSigner {
 		signBody:       signBody,
 		forceStreaming: forceStreaming,
 	}
+}
+
+func (s *HeaderSigner) Sign(req *fasthttp.Request, credentials *signer.Credentials, region string, now time.Time) (canonicalRequest string, stringToSign string, err error) {
+	// AWS S3 specify the use of UTC time
+	now = now.UTC()
+
+	ctx := &headerSigningCtx{
+		Signer: *s,
+
+		Req:         req,
+		Credentials: *credentials,
+		Region:      region,
+		Now:         now.UTC(),
+		haveTrailer: len(req.Header.Peek(HeaderXAmzTrailer)) > 0,
+
+		scope: now.Format(FormatYYYYMMDD) + "/" + region + "/s3/aws4_request",
+	}
+
+	impl, err := s.getPayloadTransformer(req)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Sanitize request
+	req.Header.Del(HeaderAuthorization)
+	req.Header.Del(HeaderXAmzContentSHA256)
+	req.Header.Set(HeaderXAmzDate, now.Format(FormatXAmzDate))
+
+	if err := impl.Prepare(); err != nil {
+		return "", "", err
+	}
+
+	ctx.computeHeaders()
+
+	ctx.computeSigningKey()
+
+	ctx.computeCanonicalRequest()
+	ctx.computeStringToSign()
+
+	signature := ctx.getSignature()
+
+	req.Header.Set(
+		HeaderAuthorization,
+		fmt.Sprintf(
+			"AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s",
+			credentials.AccessKeyID,
+			ctx.scope,
+			ctx.signedHeaders,
+			signature,
+		),
+	)
+
+	impl.Transform(
+		signature,
+		ctx.Now.Format(FormatXAmzDate),
+		ctx.scope,
+		ctx.signingKey,
+	)
+
+	return ctx.canonicalRequest, ctx.stringToSign, nil
 }
 
 func (s *HeaderSigner) getPayloadTransformer(req *fasthttp.Request) (payloadTransformer, error) {
@@ -230,66 +290,6 @@ func (s *HeaderSigner) getPayloadTransformer(req *fasthttp.Request) (payloadTran
 			trailerValue: trailerValue,
 		},
 		nil
-}
-
-func (s *HeaderSigner) Sign(req *fasthttp.Request, credentials *signer.Credentials, region string, now time.Time) (canonicalRequest string, stringToSign string, err error) {
-	// AWS S3 specify the use of UTC time
-	now = now.UTC()
-
-	ctx := &headerSigningCtx{
-		Signer: *s,
-
-		Req:         req,
-		Credentials: *credentials,
-		Region:      region,
-		Now:         now.UTC(),
-		haveTrailer: len(req.Header.Peek(HeaderXAmzTrailer)) > 0,
-
-		scope: now.Format(FormatYYYYMMDD) + "/" + region + "/s3/aws4_request",
-	}
-
-	payloadTransformer, err := s.getPayloadTransformer(req)
-	if err != nil {
-		return "", "", err
-	}
-
-	// Sanitize request
-	req.Header.Del(HeaderAuthorization)
-	req.Header.Del(HeaderXAmzContentSHA256)
-	req.Header.Set(HeaderXAmzDate, now.Format(FormatXAmzDate))
-
-	if err := payloadTransformer.Prepare(); err != nil {
-		return "", "", err
-	}
-
-	ctx.computeHeaders()
-
-	ctx.computeSigningKey()
-
-	ctx.computeCanonicalRequest()
-	ctx.computeStringToSign()
-
-	signature := ctx.getSignature()
-
-	req.Header.Set(
-		HeaderAuthorization,
-		fmt.Sprintf(
-			"AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s",
-			credentials.AccessKeyID,
-			ctx.scope,
-			ctx.signedHeaders,
-			signature,
-		),
-	)
-
-	payloadTransformer.Transform(
-		signature,
-		ctx.Now.Format(FormatXAmzDate),
-		ctx.scope,
-		ctx.signingKey,
-	)
-
-	return ctx.canonicalRequest, ctx.stringToSign, nil
 }
 
 type headerSigningCtx struct {

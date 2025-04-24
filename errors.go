@@ -29,6 +29,32 @@ type ServerSideError struct {
 	Response *fasthttp.Response `xml:"-"`
 }
 
+func NewServerSideError(resp *fasthttp.Response) *ServerSideError {
+	statusCode := resp.StatusCode()
+
+	ret := new(ServerSideError)
+	ret.Code = fmt.Sprintf("HTTP %d", statusCode)
+	ret.RequestID = string(resp.Header.Peek(HeaderXAmzRequestID))
+	ret.Response = new(fasthttp.Response)
+	ret.StatusCode = statusCode
+	resp.CopyTo(ret.Response)
+
+	switch {
+	case fasthttp.StatusCodeIsRedirect(statusCode):
+		ret.Message = fmt.Sprintf("Please redirect to: %q", string(resp.Header.Peek(HeaderLocation)))
+	case statusCode >= 100 && statusCode < 200:
+		ret.Message = "Have receive an informational status code..."
+	case statusCode == fasthttp.StatusNoContent:
+		ret.Message = "No content from the server"
+	default:
+		if err := xml.Unmarshal(resp.Body(), ret); err != nil {
+			ret.Message = fmt.Sprintf("xml error response deserializing error: %v", err)
+		}
+	}
+
+	return ret
+}
+
 func (e *ServerSideError) Error() string {
 	var code string
 	if e.Code != "" {
@@ -58,30 +84,4 @@ func (e *ServerSideError) Error() string {
 		hostID,
 		e.Message,
 	)
-}
-
-func NewServerSideError(resp *fasthttp.Response) *ServerSideError {
-	statusCode := resp.StatusCode()
-
-	ret := new(ServerSideError)
-	ret.Code = fmt.Sprintf("HTTP %d", statusCode)
-	ret.RequestID = string(resp.Header.Peek(HeaderXAmzRequestID))
-	ret.Response = new(fasthttp.Response)
-	ret.StatusCode = statusCode
-	resp.CopyTo(ret.Response)
-
-	switch {
-	case fasthttp.StatusCodeIsRedirect(statusCode):
-		ret.Message = fmt.Sprintf("Please redirect to: %q", string(resp.Header.Peek(HeaderLocation)))
-	case statusCode >= 100 && statusCode < 200:
-		ret.Message = "Have receive an informational status code..."
-	case statusCode == fasthttp.StatusNoContent:
-		ret.Message = "No content from the server"
-	default:
-		if err := xml.Unmarshal(resp.Body(), ret); err != nil {
-			ret.Message = fmt.Sprintf("xml error response deserializing error: %v", err)
-		}
-	}
-
-	return ret
 }

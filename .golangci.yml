@@ -5,6 +5,7 @@ linters:
     - bodyclose
     - dupl
     - errname
+    - funcorder
     - goconst
     - gocritic
     - gocyclo
